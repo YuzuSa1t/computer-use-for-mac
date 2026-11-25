@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager
+.build/
+swift/.build/
+*.xcodeproj
+*.xcworkspace
+
+# build output
+dist/
+
+# node
+node_modules/
+npm-debug.log*
+
+# local runtime state (never commit a machine's permissions/state)
+.opencua/
+*.sock
+
+# editors
+.idea/
+.vscode/
+*.swp

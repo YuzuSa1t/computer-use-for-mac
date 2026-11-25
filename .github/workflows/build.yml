@@ -1,0 +1,41 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  helper:
+    name: Swift helper
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        working-directory: swift
+        run: swift build -c release --disable-sandbox
+
+  bridge:
+    name: Node bridge
+    runs-on: macos-14
+    strategy:
+      matrix:
+        node: ["18", "20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Syntax check
+        run: |
+          for f in server/*.mjs server/lib/*.mjs examples/*.mjs; do
+            node --check "$f"
+          done
+      # The bridge must never gain a runtime dependency.
+      - name: Assert no dependencies
+        run: |
+          test ! -f package.json
+          test ! -d node_modules
