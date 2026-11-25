@@ -20,7 +20,9 @@ pointer stays put, keyboard focus is never taken — so an agent can work in one
 window while you keep typing in another. And the run stays legible, with a blue
 outline and a standing "OpenCUA is operating …" badge that hold until the run ends.
 
-![OpenCUA typing 5201314 into Calculator — a blue outline, a standing "OpenCUA is operating Calculator" badge, and a software cursor landing on each key](docs/demo.gif)
+<p align="center">
+  <img src="docs/demo.gif" width="270" alt='OpenCUA typing 5201314 into Calculator — a blue outline, a standing "OpenCUA is operating Calculator" badge, and a software cursor landing on each key'>
+</p>
 
 ---
 

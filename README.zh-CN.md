@@ -17,7 +17,9 @@ JavaScript 客户端来用，你手上任何一个 agent 都能直接驱动它�
 不抢走，agent 操作一个窗口时你可以同时在另一个窗口里打字。而且整段操作都看得见，
 目标窗口带蓝色描边和「OpenCUA 正在操作…」徽标，直到这段操作结束才撤。
 
-![OpenCUA 操作计算器输入 5201314：蓝色描边、常驻的「OpenCUA 正在操作计算器」徽标、软件光标逐键落点](docs/demo.gif)
+<p align="center">
+  <img src="docs/demo.gif" width="270" alt="OpenCUA 操作计算器输入 5201314：蓝色描边、常驻的「OpenCUA 正在操作计算器」徽标、软件光标逐键落点">
+</p>
 
 ---
 
