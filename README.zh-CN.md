@@ -64,6 +64,34 @@ node server/cua.mjs doctor     # "all_granted": true 表示两项授权都到位
 
 ---
 
+## 实现方式
+
+```mermaid
+flowchart TB
+    A["你的 agent<br/>任意 MCP 客户端、命令行，或自己的 JS"]
+    B["Node 桥接层<br/>opencua-mcp.mjs · cua.mjs<br/>13 个工具，零 npm 依赖"]
+    C["OpenCUA Helper.app<br/>Swift · LSUIElement · 唯一持有系统授权"]
+    D["辅助功能 API<br/>元素树、按身份按压"]
+    E["CGEvent<br/>点击、按键、输入"]
+    F["窗口截图<br/>窗口、坐标、view 映射"]
+
+    A -->|"MCP over stdio"| B
+    B -->|"JSON-RPC · ~/.opencua/helper.sock"| C
+    C --> D
+    C --> E
+    C --> F
+```
+
+这个分层只为一件事：**TCC 权限属于 bundle，不属于你的 agent。** 给  
+`OpenCUA Helper.app` 授权一次，所有客户端——命令行、MCP 宿主、测试脚本——共享这份授权，  
+不再弹窗。helper 是机件，桥接层随时可丢。
+
+读是原生接口调用，不是模型推理：辅助功能树直接给出角色、标识、值和坐标范围。写也是原生  
+接口调用——元素走 AX 按压，没有元素时向目标 pid 投递合成的 `CGEvent`。这就是为什么两者  
+都以几十毫秒计，也是为什么它们能操作一个待在你编辑器后面的应用。
+
+---
+
 ## 为什么它不一样
 
 > 给你的 agent 一双手，而不是把你的 Mac 交出去。
@@ -97,53 +125,6 @@ node server/cua.mjs doctor     # "all_granted": true 表示两项授权都到位
 徽标是*状态*而不是通知：整段操作期间一直在，操作结束才走。详见  
 [过程可见](#过程可见)。
 
-|          |                                  |
-| -------- | -------------------------------- |
-| **后台执行** | 输入直接投递到目标进程，不激活窗口、不移动光标。         |
-| **元素优先** | 原生辅助功能树，按身份直接按压；坐标仅作兜底。          |
-| **过程可见** | 常驻窗口描边 + 徽标、滑动光标、点击波纹。           |
-| **按需存活** | 不是守护进程。干完活自己退出，下次调用约 0.7 秒懒启动。   |
-| **安全闸门** | 黑名单、锁屏熔断、可选逐应用审批、过期视图拒绝。         |
-| **载荷精简** | 计算器一次状态读取约 3.2KB 文本（35 个节点）加一张图。 |
-| **零依赖**  | 不装任何 npm 包，没有运行时要安装，不联网。         |
-
----
-
-## 实现方式
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Agent — Claude Code / Codex / WorkBuddy / Trae / Trace     │
-│          Cursor / Cline / Windsurf / 任意 MCP 客户端        │
-└──────────────────────────┬──────────────────────────────────┘
-                           │  MCP over stdio   ·   或 CLI
-┌──────────────────────────▼──────────────────────────────────┐
-│  server/opencua-mcp.mjs   ·   server/cua.mjs                │
-│  零依赖 Node 桥接层 — 13 个工具，不引入任何 npm 包          │
-└──────────────────────────┬──────────────────────────────────┘
-                           │  按行分隔的 JSON-RPC
-                           │  ~/.opencua/helper.sock
-┌──────────────────────────▼──────────────────────────────────┐
-│  OpenCUA Helper.app — Swift，LSUIElement（无 Dock 图标）    │
-│  TCC 权限的唯一持有者                                       │
-│                                                             │
-│  AXEngine       辅助功能树、元素按压                        │
-│  EventEngine    CGEvent 合成（点击/按键/输入）              │
-│  ScreenEngine   窗口截图 + view 坐标系映射                  │
-│  CursorOverlay  动画软件光标（纯视觉）                      │
-│  PolicyEngine   黑名单、审批、锁屏熔断                      │
-│  RPCServer      Unix socket JSON-RPC + 空闲看门狗           │
-└─────────────────────────────────────────────────────────────┘
-```
-
-这个分层只为一件事：**TCC 权限属于 bundle，不属于你的 agent。** 给  
-`OpenCUA Helper.app` 授权一次，所有客户端——命令行、MCP 宿主、测试脚本——共享这份授权，  
-不再弹窗。helper 是机件，桥接层随时可丢。
-
-读是原生接口调用，不是模型推理：辅助功能树直接给出角色、标识、值和坐标范围。写也是原生  
-接口调用——元素走 AX 按压，没有元素时向目标 pid 投递合成的 `CGEvent`。这就是为什么两者  
-都以几十毫秒计，也是为什么它们能操作一个待在你编辑器后面的应用。
-
 ---
 
 ## 安全
@@ -164,11 +145,8 @@ node server/cua.mjs doctor     # "all_granted": true 表示两项授权都到位
   客户端。
 - **它会结束。** helper 不是守护进程——干完活退出，下次懒启动。见[生命周期](#生命周期)。
 
-错误码稳定且明确：`APP_BLOCKED`、`NOT_APPROVED`、`LOCKED`、`VIEW_STALE`、  
-`TARGET_NOT_FOUND`、`BAD_ELEMENT`、`NO_WINDOW`、`NO_FIELD`、`CAPTURE_FAILED`、  
-`SET_FAILED`、`EVENT_FAILED`、`AX_FAILED`、`AX_ACTION_FAILED`、`OPEN_FAILED`。  
-请求本身畸形时另有 `BAD_PARAMS`、`UNKNOWN_METHOD`；完整列表见  
-[docs/protocol.md](docs/protocol.md)。
+错误码明确：被拒绝的操作会带回原因（`APP_BLOCKED`、`NOT_APPROVED`、`LOCKED`、  
+`VIEW_STALE` 等），而不是静默失败。完整列表见 [docs/protocol.md](docs/protocol.md)。
 
 ---
 
@@ -195,11 +173,8 @@ node server/cua.mjs doctor     # "all_granted": true 表示两项授权都到位
   撤掉。给一个看不见的窗口描边，等于在人真正看着的东西上画框，还标错了名字。
 - **不会重复刷屏。** 连续四十次点击算一次连续提示；同一应用需静默  
   `OPENCUA_ANNOUNCE_GAP` 秒后才会重新提示。
-- **不会凭空编造方向。** 只有上一步动作就在同一个窗口内时才画尾迹；否则光标直接在目标处  
-  淡入——从窗口边缘拉一条线，看起来像一根从屏幕外伸进来的电线。
-- **代价是一次手势，不是一段等待。** 点击会等约 300ms 让光标先落位。单次调用传  
-  `instant: true`、或脚本循环里设 `OPENCUA_CURSOR=0`，延迟降到约 30ms。
-- **绝不阻塞。** 所有动效都是装饰，覆盖层里的任何代码都不得延迟或改变动作本身。
+- **绝不阻塞。** 所有动效都是装饰，覆盖层里的任何代码都不得延迟或改变动作本身。  
+  想要速度而不是动画时，传 `instant: true`。
 
 徽标跟随系统语言——中文环境下就是上图里的「OpenCUA 正在操作计算器」。可用  
 `OPENCUA_LANG=zh` / `en` 强制指定。整体关闭用 `OPENCUA_ANNOUNCE=0`（只关光标用  

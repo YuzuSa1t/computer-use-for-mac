@@ -68,6 +68,37 @@ node server/cua.mjs doctor     # "all_granted": true means both grants are set
 
 ---
 
+## How it works
+
+```mermaid
+flowchart TB
+    A["Your agent<br/>any MCP client, the CLI, or your own JS"]
+    B["Node bridge<br/>opencua-mcp.mjs · cua.mjs<br/>13 tools, zero npm dependencies"]
+    C["OpenCUA Helper.app<br/>Swift · LSUIElement · sole holder of the TCC grants"]
+    D["Accessibility API<br/>element tree, presses by identity"]
+    E["CGEvent<br/>clicks, keys, typing"]
+    F["Screen capture<br/>windows, frames, view mapping"]
+
+    A -->|"MCP over stdio"| B
+    B -->|"JSON-RPC · ~/.opencua/helper.sock"| C
+    C --> D
+    C --> E
+    C --> F
+```
+
+The split exists for one reason: **TCC permissions belong to a bundle, not to
+your agent.** Grant Accessibility and Screen Recording once to
+`OpenCUA Helper.app`, and every client — CLI, MCP host, test script — shares that
+grant without re-prompting. The helper is machinery; the bridge is disposable.
+
+Reading is a native API call, not a model inference: the accessibility tree gives
+roles, identifiers, values and frames directly. Acting is a native API call too —
+an AX press for elements, a synthesized `CGEvent` addressed to the target pid when
+there is no element. That is the entire reason both are measured in tens of
+milliseconds, and the reason they work on an app sitting behind your editor.
+
+---
+
 ## Why it feels different
 
 > Give your agent hands on the Mac, without taking the Mac away from you.
@@ -107,56 +138,6 @@ operating Calculator**, a cursor glides to each target, and every press lands wi
 a dot and one expanding ring. The badge is *state*, not a notification: it holds
 for the whole run and leaves when the run does. See [Visible automation](#visible-automation).
 
-| | |
-|---|---|
-| **Background operation** | Input injected straight into the target process. No activation, no cursor warp. |
-| **Element-first** | Native accessibility tree, direct presses. Coordinates only as a fallback. |
-| **Visible automation** | Standing window outline + badge, gliding cursor, click pulse. |
-| **Bounded lifetime** | Not a daemon. Exits when the work is done, restarts lazily in ~0.7 s. |
-| **Safety gates** | Deny-list, lock-screen breaker, optional per-app approval, stale-view rejection. |
-| **Small payloads** | A Calculator state read is ~3.2 KB of text (35 nodes) plus one image. |
-| **Zero dependencies** | No npm packages, no runtime to install, no network calls. |
-
----
-
-## How it works
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Agent — Claude Code / Codex / WorkBuddy / Trace / Cursor   │
-│          Cline / Windsurf / any MCP client                  │
-└──────────────────────────┬──────────────────────────────────┘
-                           │  MCP over stdio   ·   or CLI
-┌──────────────────────────▼──────────────────────────────────┐
-│  server/opencua-mcp.mjs   ·   server/cua.mjs                │
-│  zero-dependency Node bridge — 13 tools, no npm packages    │
-└──────────────────────────┬──────────────────────────────────┘
-                           │  newline-delimited JSON-RPC
-                           │  ~/.opencua/helper.sock
-┌──────────────────────────▼──────────────────────────────────┐
-│  OpenCUA Helper.app — Swift, LSUIElement (no Dock icon)     │
-│  sole holder of the TCC permissions                         │
-│                                                             │
-│  AXEngine       accessibility tree, element presses         │
-│  EventEngine    CGEvent synthesis for clicks/keys/typing    │
-│  ScreenEngine   window capture + view coordinate mapping    │
-│  CursorOverlay  animated software cursor (pure visuals)     │
-│  PolicyEngine   deny-list, approvals, lock-screen guard     │
-│  RPCServer      Unix socket JSON-RPC + idle watchdog        │
-└─────────────────────────────────────────────────────────────┘
-```
-
-The split exists for one reason: **TCC permissions belong to a bundle, not to
-your agent.** Grant Accessibility and Screen Recording once to
-`OpenCUA Helper.app`, and every client — CLI, MCP host, test script — shares that
-grant without re-prompting. The helper is machinery; the bridge is disposable.
-
-Reading is a native API call, not a model inference: the accessibility tree gives
-roles, identifiers, values and frames directly. Acting is a native API call too —
-an AX press for elements, a synthesized `CGEvent` addressed to the target pid when
-there is no element. That is the entire reason both are measured in tens of
-milliseconds, and the reason they work on an app sitting behind your editor.
-
 ---
 
 ## Safety
@@ -185,10 +166,8 @@ each one refuses the call.
 - **It ends.** The helper is not a daemon — it exits after the work and restarts
   lazily. See [Lifecycle](#lifecycle).
 
-Errors are explicit and stable: `APP_BLOCKED`, `NOT_APPROVED`, `LOCKED`,
-`VIEW_STALE`, `TARGET_NOT_FOUND`, `BAD_ELEMENT`, `NO_WINDOW`, `NO_FIELD`,
-`CAPTURE_FAILED`, `SET_FAILED`, `EVENT_FAILED`, `AX_FAILED`, `AX_ACTION_FAILED`,
-`OPEN_FAILED`. Malformed requests add `BAD_PARAMS` and `UNKNOWN_METHOD`; the full
+Errors are explicit: a refused action returns its reason (`APP_BLOCKED`,
+`NOT_APPROVED`, `LOCKED`, `VIEW_STALE`, …) instead of failing silently. The full
 table lives in [docs/protocol.md](docs/protocol.md).
 
 ---
@@ -224,14 +203,9 @@ Design constraints, in case you want to change it:
   over whatever the person is actually looking at.
 - **It does not repeat.** A run of forty clicks is one continuous announcement.
   The same app is only re-announced after `OPENCUA_ANNOUNCE_GAP` seconds of quiet.
-- **It does not invent a direction.** The streak is drawn only when the previous
-  action was in the same window. Otherwise the cursor fades in at the target — a
-  line from the window edge would read as a wire running in from off-screen.
-- **It costs one gesture, not a wait.** Clicking sleeps ~300 ms so the cursor
-  lands before the press. Pass `instant: true`, or set `OPENCUA_CURSOR=0` for a
-  scripted loop, to drop that to ~30 ms.
 - **It never blocks.** Every effect is decoration; nothing in the overlay may
-  delay or alter the action itself.
+  delay or alter the action itself. Pass `instant: true` when you would rather
+  have the speed than the animation.
 
 The badge follows your locale — `OpenCUA 正在操作计算器` in Chinese, as in the
 demo above. Force it with `OPENCUA_LANG=zh` or `en`. Turn the whole layer off with
