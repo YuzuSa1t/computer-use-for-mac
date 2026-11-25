@@ -6,24 +6,21 @@ English | [简体中文](README.zh-CN.md)
 [![Platform: macOS 13+](https://img.shields.io/badge/platform-macOS%2013%2B-black.svg)](#requirements)
 [![Node: 18+](https://img.shields.io/badge/node-18%2B-339933.svg)](#requirements)
 [![Dependencies: none](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#how-it-works)
-[![Agents: any MCP client](https://img.shields.io/badge/agents-any%20MCP%20client-8a5cf6.svg)](#works-with-every-agent)
+![Agents: any MCP client](https://img.shields.io/badge/agents-any%20MCP%20client-8a5cf6.svg)
 
-OpenCUA gives an AI agent direct control of native macOS apps — clicking buttons,
-filling fields, sending key chords, scrolling, dragging. It runs on your own Mac,
-a local service rather than a cloud VM, and plugs in as an MCP server, a CLI, or a
-plain JavaScript client, so Claude Code, Codex, WorkBuddy, Trae, and Cursor can
-all drive it.
+OpenCUA takes the repetitive clicking off your hands. It lets an AI agent drive
+native macOS apps the way you would — pressing buttons, filling fields, sending key
+chords, scrolling, dragging — while you get on with something else.
 
-What sets it apart is that you **never hand over the machine**. Input is injected
-straight into the target process — no window comes forward, the real pointer stays
-put, keyboard focus is never taken — so an agent can drive one window while you
-keep typing in another. And the run stays legible: a blue outline and a standing
-"OpenCUA is operating …" badge on the target window hold for as long as the run
-does.
+It runs on your own Mac, a local service rather than a cloud VM, and plugs in as an
+MCP server, a CLI, or a plain JavaScript client, so whatever agent you already use
+can drive it. What sets it apart is that you **never hand over the machine**: input
+is injected straight into the target process — no window comes forward, the real
+pointer stays put, keyboard focus is never taken — so an agent can work in one
+window while you keep typing in another. And the run stays legible, with a blue
+outline and a standing "OpenCUA is operating …" badge that hold until the run ends.
 
 ![OpenCUA typing 5201314 into Calculator — a blue outline, a standing "OpenCUA is operating Calculator" badge, and a software cursor landing on each key](docs/demo.gif)
-
-<sub>A real run, unedited: `cua_click` on each key of Calculator, `5201314`. Your cursor did not move. Your focus never left this window.</sub>
 
 ---
 
@@ -66,57 +63,6 @@ and prints registration snippets for your agent. Then verify:
 node server/cua.mjs doctor     # "all_granted": true means both grants are set
 ```
 </details>
-
----
-
-## Works with every agent
-
-There is nothing OpenCUA-specific to integrate. Anything that speaks MCP works,
-and anything that can run a shell command works through the CLI.
-
-| Agent | Setup |
-|---|---|
-| **Claude Code** | `claude mcp add opencua -- node ~/.opencua/src/server/opencua-mcp.mjs` |
-| **Codex CLI** | `codex mcp add opencua -- node ~/.opencua/src/server/opencua-mcp.mjs` |
-| **WorkBuddy** | `~/.workbuddy/mcp.json` → the JSON below, then enable it under 连接器 → 信任 |
-| **Trae** (ByteDance) | Settings → MCP → Add → Add Manually → paste the JSON below |
-| **Trace** | Any MCP host; use the JSON below as-is |
-| **Cursor** | `~/.cursor/mcp.json` → the JSON below |
-| **Cline / Roo Code** | MCP Servers → Installed → Configure MCP Servers → paste |
-| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` → the JSON below |
-| **Zed / Continue / Claude Desktop** | The same JSON; the transport is plain stdio |
-| **Aider / any shell-capable agent** | Skip MCP entirely: `node server/cua.mjs state Calculator` |
-
-The generic config, for every client that takes JSON:
-
-```json
-{
-  "mcpServers": {
-    "opencua": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["/Users/YOU/.opencua/src/server/opencua-mcp.mjs"]
-    }
-  }
-}
-```
-
-Two client-specific gotchas, both of which cost people an afternoon:
-
-- **WorkBuddy** reads `~/.workbuddy/mcp.json` — *without* a leading dot, and merge
-  into `mcpServers` rather than replacing the file. A newly written server also
-  has to be enabled in the connector list before it loads.
-- **Trae** keeps project-level MCP off by default. Adding the server through
-  Settings → MCP works immediately; dropping it into `.trae/mcp.json` additionally
-  needs the "启用项目级 MCP" toggle.
-
-The client receives 13 `cua_*` tools and a one-time operating guide through
-`initialize.instructions`. Tool descriptions stay to one line each, so the model
-spends its context on your task instead of on the plumbing.
-
-Because the server is a thin stdio bridge rather than a hosted runtime, the same
-install serves every agent on the machine at once — and a grant you gave once
-keeps working after the helper restarts.
 
 ---
 
@@ -295,11 +241,25 @@ demo above. Force it with `OPENCUA_LANG=zh` or `en`. Turn the whole layer off wi
 
 ### As an MCP server
 
+Register the server the way your client does it. With Claude Code, for example:
+
 ```bash
 claude mcp add opencua -- node /absolute/path/to/opencua/server/opencua-mcp.mjs
 ```
 
-Or the generic JSON from [Works with every agent](#works-with-every-agent).
+Any client that reads MCP JSON:
+
+```json
+{
+  "mcpServers": {
+    "opencua": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/absolute/path/to/opencua/server/opencua-mcp.mjs"]
+    }
+  }
+}
+```
 
 ### As a CLI
 

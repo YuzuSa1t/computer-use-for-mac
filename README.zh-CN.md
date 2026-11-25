@@ -6,20 +6,18 @@
 [![Platform: macOS 13+](https://img.shields.io/badge/platform-macOS%2013%2B-black.svg)](#环境要求)
 [![Node: 18+](https://img.shields.io/badge/node-18%2B-339933.svg)](#环境要求)
 [![Dependencies: none](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#实现方式)
-[![Agents: any MCP client](https://img.shields.io/badge/agents-any%20MCP%20client-8a5cf6.svg)](#兼容所有-agent)
+![Agents: any MCP client](https://img.shields.io/badge/agents-any%20MCP%20client-8a5cf6.svg)
 
-OpenCUA 让 AI agent 直接操作 macOS 原生应用——点击按钮、填写输入框、敲快捷键、
-滚动页面、拖拽元素。它跑在你自己 Mac 上，是本地服务而不是云端虚拟机；可以当 MCP
-服务、命令行工具或 JavaScript 客户端来用，所以 Claude Code、Codex、WorkBuddy、
-Trae、Cursor 这类 agent 都能直接驱动它。
+OpenCUA 把你从重复的点击里解放出来：让 AI agent 像你一样操作 macOS 原生应用——
+点按钮、填表单、敲快捷键、翻页面、拖元素，而你可以腾出手去做别的事。
 
-它最不同的地方是：你不用把机器让出来。输入直接投递进目标进程，窗口不置前、真实光标
-不动、键盘焦点不抢走，agent 操作一个窗口时你可以同时在另一个窗口里打字。而且整段操作
-都看得见——目标窗口带蓝色描边和「OpenCUA 正在操作…」徽标，直到这段操作结束才撤。
+它跑在你自己 Mac 上，是本地服务而不是云端虚拟机；可以当 MCP 服务、命令行工具或
+JavaScript 客户端来用，你手上任何一个 agent 都能直接驱动它。它最不同的地方是：
+**你不用把机器让出来**——输入直接投递进目标进程，窗口不置前、真实光标不动、键盘焦点
+不抢走，agent 操作一个窗口时你可以同时在另一个窗口里打字。而且整段操作都看得见，
+目标窗口带蓝色描边和「OpenCUA 正在操作…」徽标，直到这段操作结束才撤。
 
 ![OpenCUA 操作计算器输入 5201314：蓝色描边、常驻的「OpenCUA 正在操作计算器」徽标、软件光标逐键落点](docs/demo.gif)
-
-<sub>真实运行，未经剪辑：对计算器的每个按键各发一次 `cua_click`，输入 `5201314`。你的光标没有移动，焦点始终留在你正在打字的窗口。</sub>
 
 ---
 
@@ -61,52 +59,6 @@ node server/cua.mjs doctor     # "all_granted": true 表示两项授权都到位
 ```
 
 </details>
-
----
-
-## 兼容所有 agent
-
-没有任何 OpenCUA 专属的集成。会说 MCP 的都能接，能执行 shell 命令的走命令行。
-
-| Agent                               | 接入方式                                                                   |
-| ----------------------------------- | ---------------------------------------------------------------------- |
-| **Claude Code**                     | `claude mcp add opencua -- node ~/.opencua/src/server/opencua-mcp.mjs` |
-| **Codex CLI**                       | `codex mcp add opencua -- node ~/.opencua/src/server/opencua-mcp.mjs`  |
-| **WorkBuddy**                       | 写 `~/.workbuddy/mcp.json`（下方 JSON），再到「连接器」里点「信任」启用                     |
-| **Trae**（字节跳动）                      | 设置 → MCP → 添加 → 手动添加 → 粘贴下方 JSON                                       |
-| **Trace**                           | 任意 MCP 宿主，直接用下方 JSON                                                   |
-| **Cursor**                          | `~/.cursor/mcp.json` → 下方 JSON                                         |
-| **Cline / Roo Code**                | MCP Servers → Installed → Configure → 粘贴 JSON                          |
-| **Windsurf**                        | `~/.codeium/windsurf/mcp_config.json` → 下方 JSON                        |
-| **Zed / Continue / Claude Desktop** | 同一段 JSON，传输就是普通 stdio                                                  |
-| **Aider / 任何能跑 shell 的 agent**      | 完全不接 MCP：`node server/cua.mjs state Calculator`                        |
-
-通用配置，所有接受 JSON 的客户端都适用：
-
-```json
-{
-  "mcpServers": {
-    "opencua": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["/Users/YOU/.opencua/src/server/opencua-mcp.mjs"]
-    }
-  }
-}
-```
-
-两个真的会让人卡一下午的细节：
-
-- **WorkBuddy** 读的是 `~/.workbuddy/mcp.json`——**没有**前缀点，而且要合并进  
-  `mcpServers`，不要重写整个文件。写完还需要在连接器列表里启用才会加载。
-- **Trae** 的项目级 MCP 默认是关的。从「设置 → MCP」添加即刻生效；放进  
-  `.trae/mcp.json` 的话还要额外打开「启用项目级 MCP」开关。
-
-客户端会拿到 13 个 `cua_*` 工具，操作手册只在 `initialize.instructions` 里下发一次，  
-单个工具描述保持一行——让模型把注意力放在任务上，而不是管线细节上。
-
-服务端只是一个薄薄的 stdio 桥接层，不是托管运行时，所以同一份安装同时服务这台机器上的  
-所有 agent；你授权过一次，helper 重启后依然有效。
 
 ---
 
@@ -283,11 +235,25 @@ node server/cua.mjs doctor
 
 ### 作为 MCP 服务
 
+按你所用客户端的方式注册就行。以 Claude Code 为例：
+
 ```bash
 claude mcp add opencua -- node /absolute/path/to/opencua/server/opencua-mcp.mjs
 ```
 
-其他客户端用[兼容所有 agent](#兼容所有-agent)里的 JSON。
+其他客户端把这段 JSON 填进自己的 MCP 配置：
+
+```json
+{
+  "mcpServers": {
+    "opencua": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/absolute/path/to/opencua/server/opencua-mcp.mjs"]
+    }
+  }
+}
+```
 
 ### 作为命令行
 
